@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Eureach API
+  version: 1.0.0
+  description: Configuration-driven, multi-tenant outreach operations API.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /health/live:
+    get:
+      security: []
+      responses: { '200': { description: Service is alive } }
+  /health/ready:
+    get:
+      security: []
+      responses: { '200': { description: Service and database are ready } }
+  /api/v1/auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantSlug, email, password]
+              properties:
+                tenantSlug: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 12 }
+      responses: { '200': { description: Authenticated } }
+  /api/v1/auth/refresh:
+    post:
+      security: []
+      responses: { '200': { description: Access token refreshed } }
+  /api/v1/auth/logout:
+    post:
+      security: []
+      responses: { '200': { description: Refresh session revoked } }
+  /api/v1/config:
+    get:
+      responses: { '200': { description: Active tenant configuration } }
+  /api/v1/dashboard:
+    get:
+      responses: { '200': { description: Configuration-aware dashboard metrics } }
+  /api/v1/records:
+    get:
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0 } }
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses: { '200': { description: Paginated records } }
+    post:
+      responses: { '201': { description: Record created } }
+  /api/v1/records/{id}:
+    parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+    get:
+      responses: { '200': { description: Record } }
+    patch:
+      responses:
+        '200': { description: Record updated }
+        '409': { description: Stale concurrent update rejected }
+  /api/v1/records/{id}/outreach:
+    post:
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: Idempotency-Key, required: false, schema: { type: string, minLength: 8, maxLength: 200 } }
+      responses:
+        '201': { description: Outreach recorded }
+        '200': { description: Idempotent replay }
+  /api/v1/campaigns:
+    get: { responses: { '200': { description: Campaigns } } }
+    post: { responses: { '201': { description: Campaign created } } }
+  /api/v1/queues:
+    get: { responses: { '200': { description: Queues } } }
+    post: { responses: { '201': { description: Queue created } } }
+  /api/v1/follow-ups:
+    get: { responses: { '200': { description: Follow-ups } } }
+  /api/v1/audit:
+    get: { responses: { '200': { description: Audit events } } }
+  /api/v1/analytics:
+    get: { responses: { '200': { description: Analytics events } } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

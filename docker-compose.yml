@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eureach
+      POSTGRES_USER: eureach_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/001_core_schema.sql:/docker-entrypoint-initdb.d/001_core_schema.sql:ro
+      - ./database/002_runtime_role.sql:/docker-entrypoint-initdb.d/002_runtime_role.sql:ro
+      - ./database/migrations/003_launch_hardening.sql:/docker-entrypoint-initdb.d/003_launch_hardening.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U eureach_admin -d eureach"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_URL: postgresql://eureach_app:${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD}@postgres:5432/eureach
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ACCESS_TTL_SECONDS: 900
+      REFRESH_TTL_DAYS: 30
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      ENABLE_METRICS: ${ENABLE_METRICS:-false}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  postgres-data:
