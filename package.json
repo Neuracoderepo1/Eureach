@@ -14,6 +14,7 @@
     "start": "node server/index.mjs",
     "seed": "node scripts/seed.mjs",
     "test:security": "node --test tests/security.test.mjs",
+    "test:rls": "node --test tests/rls-isolation.test.mjs",
     "preflight": "node scripts/preflight.mjs",
     "backup": "sh scripts/backup.sh"
   },

@@ -37,6 +37,24 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/001_core_schema.sql
         env:
           PGPASSWORD: postgres
+      - name: Create runtime role
+        run: bash database/002_runtime_role.sh
+        env:
+          PGHOST: localhost
+          PGPASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: eureach
+          POSTGRES_APP_PASSWORD: ci-only-app-password-123
+      - name: Apply launch-hardening migration
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/003_launch_hardening.sql
+        env:
+          PGPASSWORD: postgres
+      - name: Prove tenant RLS isolation (real Postgres, real restricted role, adversarial queries)
+        run: node --test tests/rls-isolation.test.mjs
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/eureach
+          APP_DATABASE_URL: postgresql://eureach_app:ci-only-app-password-123@localhost:5432/eureach
+      - run: npm run test:security
       - name: Validate upgrade migration
         run: |
           dropdb --if-exists --host=localhost --username=postgres eureach_upgrade

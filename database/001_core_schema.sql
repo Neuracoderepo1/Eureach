@@ -199,7 +199,16 @@ create index if not exists idx_analytics_tenant_time on analytics_event(tenant_i
 create index if not exists idx_refresh_user on refresh_token(tenant_id,user_id,expires_at desc);
 
 -- Tenant isolation is enforced in the database, not only by application code.
-do $$ declare t text; begin foreach t in array array['tenant','app_role','app_user','team','territory','campaign','queue','record','assignment','outreach_attempt','outcome','follow_up','audit_event','notification','analytics_event','refresh_token'] loop execute format('alter table %I enable row level security',t); execute format('alter table %I force row level security',t); execute format('drop policy if exists tenant_isolation on %I',t); execute format('create policy tenant_isolation on %I using (tenant_id = nullif(current_setting(''app.tenant_id'',true),'''')::uuid) with check (tenant_id = nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t); end loop; end $$;
+-- The tenant table is its own tenant boundary: it has no tenant_id column,
+-- its primary key (id) *is* the tenant identifier, so it needs a policy
+-- comparing id, not tenant_id. Every other table in this list has a
+-- tenant_id foreign key and uses the generic policy.
+alter table tenant enable row level security;
+alter table tenant force row level security;
+drop policy if exists tenant_isolation on tenant;
+create policy tenant_isolation on tenant using (id = nullif(current_setting('app.tenant_id',true),'')::uuid) with check (id = nullif(current_setting('app.tenant_id',true),'')::uuid);
+
+do $$ declare t text; begin foreach t in array array['app_role','app_user','team','territory','campaign','queue','record','assignment','outreach_attempt','outcome','follow_up','audit_event','notification','analytics_event','refresh_token'] loop execute format('alter table %I enable row level security',t); execute format('alter table %I force row level security',t); execute format('drop policy if exists tenant_isolation on %I',t); execute format('create policy tenant_isolation on %I using (tenant_id = nullif(current_setting(''app.tenant_id'',true),'''')::uuid) with check (tenant_id = nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t); end loop; end $$;
 
 
 -- The application role should never own tables. Set DATABASE_URL to this role.

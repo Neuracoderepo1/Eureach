@@ -8,6 +8,6 @@ export default defineConfig({
     // default glob, finds no Vitest suite in it, and reports a false
     // "Failed Suites" error even though the file's own tests pass fine
     // under `node --test`.
-    exclude: ["**/node_modules/**", "**/dist/**", "tests/security.test.mjs"]
+    exclude: ["**/node_modules/**", "**/dist/**", "tests/security.test.mjs", "tests/rls-isolation.test.mjs"]
   }
 });

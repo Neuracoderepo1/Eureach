@@ -2,9 +2,9 @@
 set -euo pipefail
 : "${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}"
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-  -v app_password="$POSTGRES_APP_PASSWORD" <<'SQL'
+  -v app_password="$POSTGRES_APP_PASSWORD" -v db_name="$POSTGRES_DB" <<'SQL'
 create role eureach_app login password :'app_password' nosuperuser nocreatedb nocreaterole noinherit;
-grant connect on database eureach to eureach_app;
+grant connect on database :"db_name" to eureach_app;
 grant usage on schema public to eureach_app;
 grant select,insert,update,delete on all tables in schema public to eureach_app;
 grant execute on function eureach_auth_user(text,text) to eureach_app;

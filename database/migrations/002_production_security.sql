@@ -77,9 +77,19 @@ alter table follow_up drop constraint if exists follow_up_owner_id_fkey;
 alter table follow_up add constraint fk_followup_owner_tenant foreign key(tenant_id,owner_id) references app_user(tenant_id,id);
 
 -- RLS: every tenant-owned table is invisible outside the transaction tenant context.
+-- The tenant table has no tenant_id column -- its own id is the tenant
+-- boundary -- so it gets its own policy comparing id, same as in
+-- 001_core_schema.sql. The generic loop below only covers tables that
+-- actually have a tenant_id foreign key.
+alter table tenant enable row level security;
+alter table tenant force row level security;
+drop policy if exists tenant_isolation on tenant;
+create policy tenant_isolation on tenant using (id = nullif(current_setting('app.tenant_id', true), '')::uuid) with check (id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+
 do $$ declare t text; begin
-  foreach t in array array['tenant','app_role','app_user','team','territory','campaign','queue','record','assignment','outreach_attempt','outcome','follow_up','audit_event','notification','analytics_event','refresh_token'] loop
+  foreach t in array array['app_role','app_user','team','territory','campaign','queue','record','assignment','outreach_attempt','outcome','follow_up','audit_event','notification','analytics_event','refresh_token'] loop
     execute format('alter table %I enable row level security', t);
+    execute format('alter table %I force row level security', t);
     execute format('drop policy if exists tenant_isolation on %I', t);
     execute format('create policy tenant_isolation on %I using (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid) with check (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid)', t);
   end loop;
