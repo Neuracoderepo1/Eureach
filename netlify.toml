@@ -1,0 +1,15 @@
+[build]
+  publish = "app"
+
+# app/ contains two different pages that both look like they could be
+# the homepage: marketing.html is the public landing page, and
+# index.html is the actual product's operator login console (it posts
+# credentials to the API -- it is not marketing content). Production
+# has always served the landing page at "/". Without this rewrite,
+# Netlify's default behavior is to serve app/index.html at "/" simply
+# because of its filename, which would silently swap the public
+# landing page for the product login screen.
+[[redirects]]
+  from = "/"
+  to = "/marketing.html"
+  status = 200
