@@ -9,7 +9,16 @@
 # Netlify's default behavior is to serve app/index.html at "/" simply
 # because of its filename, which would silently swap the public
 # landing page for the product login screen.
+# Netlify skips a redirect/rewrite rule by default when a real file
+# already exists at that exact path -- it only applies the rule for
+# paths with no matching static asset, unless force is set. Since
+# app/index.html genuinely exists and IS Netlify's default match for
+# "/", the rewrite below was being silently skipped without force,
+# even though the deploy log reported it as "processed without
+# errors" (processed, not necessarily applied). force = true makes
+# this rule win regardless of index.html's existence.
 [[redirects]]
   from = "/"
   to = "/marketing.html"
   status = 200
+  force = true
