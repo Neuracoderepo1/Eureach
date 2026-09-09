@@ -20,8 +20,8 @@ const appUrl = process.env.APP_DATABASE_URL;
 if (!adminUrl || !appUrl) {
   console.log('SKIP rls-isolation.test.mjs: set DATABASE_URL and APP_DATABASE_URL to run against a real Postgres instance');
 } else {
-  const adminPool = new Pool({ connectionString: adminUrl });
-  const appPool = new Pool({ connectionString: appUrl });
+  const adminPool = new Pool({ connectionString: adminUrl, connectionTimeoutMillis: 5_000 });
+  const appPool = new Pool({ connectionString: appUrl, connectionTimeoutMillis: 5_000 });
 
   async function asTenant(tenantId, fn) {
     const client = await appPool.connect();
