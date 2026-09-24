@@ -52,6 +52,8 @@ Implemented endpoints include:
 - `GET /health/live`
 - `GET /health/ready`
 
+**Note:** the operator console (`app/index.html`) currently only has screens for login, dashboard metrics, and record create/list. Outreach logging, assignment, follow-ups, campaigns, queues, and roles/users are reachable via the API above but have no console UI yet — see "Known gaps" below.
+
 ### 5. Evidence and accountability
 - Record creation/update is audited.
 - Assignments are audited.
@@ -65,7 +67,7 @@ Implemented endpoints include:
 ### 6. Production operations
 - PostgreSQL 16 baseline.
 - Database migration runner.
-- Docker multi-stage build.
+- Docker multi-stage build, both stages installed with `npm ci` for deterministic builds.
 - Non-root application container.
 - Read-only application filesystem and no-new-privileges container policy.
 - Health/readiness endpoints.
@@ -77,6 +79,8 @@ Implemented endpoints include:
 - Security headers and configurable CORS.
 - Request body limits and rate limiting.
 - Connection pooling and database health checks.
+- Backup (`scripts/backup.sh`) and guarded restore (`scripts/restore.sh`, requires `CONFIRM_RESTORE=YES`).
+- `scripts/dr-drill.sh` exercises the full backup → destroy → restore → integrity-check chain against a real, disposable Postgres database — not just that the scripts exist.
 
 ### 7. Configuration-aware operator console
 `app/index.html` is a minimal operator console that consumes the runtime configuration API. It dynamically renders record terminology and fields rather than duplicating industry-specific forms in the UI.
@@ -113,21 +117,25 @@ The database is initialized with RLS and a dedicated non-owner API role.
 
 ## Verification status
 
-Static JavaScript syntax checks pass for the server/runtime scripts. The TypeScript source was previously verified with `tsc -p tsconfig.src.json --noEmit` before this production hardening pass; this environment does not have a working local TypeScript toolchain and `npm install` timed out, so a fresh full build/Vitest run has **not** been claimed here.
+This section reflects what the committed CI pipeline (`.github/workflows/ci.yml`) actually runs on every push, not a point-in-time manual claim. As of this pass, CI:
 
-Before a real production launch, run in a network-enabled CI environment:
+- Installs with `npm ci` (deterministic; lockfile is committed).
+- Runs `npm run build` and `npm test`.
+- Runs Node syntax checks on the server entry points.
+- Applies a clean schema to a real PostgreSQL 16 instance and creates the real non-owner runtime role.
+- Applies the launch-hardening migration.
+- Runs `tests/rls-isolation.test.mjs`: adversarial tenant-isolation proof against the real, restricted runtime role — unfiltered selects, guessed IDs, cross-tenant self-joins, cross-tenant update/delete, forged tenant IDs on insert, and a no-tenant-context session, confirming isolation fails **closed**.
+- Runs `tests/authorization-matrix.test.mjs`: for every permission in the shared configuration permission set, proves a role with only that permission can call its endpoint, and a role with every *other* permission (or none) is rejected with 403 on it.
+- Runs `npm run test:security` (password hashing, JWT sign/verify/tamper-rejection).
+- Validates the upgrade path from the legacy v1.1 schema through migrations `002` and `003` in sequence against a separate database.
+- Runs `npm audit --omit=dev --audit-level=high` against production dependencies (currently a single runtime dependency, `pg`).
+- Builds the container image and scans it for high/critical vulnerabilities (report-only pending a first baseline run — see `RELEASE-CHECKLIST.md`).
 
-- `npm ci` (with a committed lockfile in the deployment repository)
-- `npm run build`
-- `npm test`
-- migration test against a clean PostgreSQL instance
-- migration upgrade test from the v1.1 schema
-- tenant-isolation integration tests with two tenants
-- auth/refresh rotation tests
-- authorization matrix tests for every permission
-- browser E2E tests for login → config → record → outreach → follow-up
-- dependency/security scanning
-- backup/restore and disaster-recovery test
-- load test against the expected Ghana-first production workload
+**Still open, and intentionally not claimed as done:**
 
-This repository is now a **production-ready implementation baseline / launch candidate**, not a claim that cloud infrastructure, DNS, secrets, CI/CD, monitoring provider, backups or a live customer deployment have already been provisioned.
+- Browser E2E only covers what the console UI currently exposes (login, dashboard, record create) — see `tests/e2e/operator-console.spec.ts` for the exact scope note. Assignment, outreach, and follow-up have no console UI yet, so they cannot be browser-tested until that UI exists.
+- `scripts/dr-drill.sh` has been written and is safe to run against a disposable database, but a drill run against production-representative infrastructure and volume has not been executed and recorded.
+- Load test against expected production concurrency and workload shape.
+- Real managed PostgreSQL, secrets manager, DNS/TLS, centralized logging, error monitoring and alerting are infrastructure decisions for the target deployment environment — none of them are provisioned by this repository, and no code change closes them.
+
+This repository is a **production-ready implementation baseline / launch candidate**. Closing the "still open" items above is what moves it from launch candidate to a verified production deployment — see `RELEASE-CHECKLIST.md` for the full gate.
