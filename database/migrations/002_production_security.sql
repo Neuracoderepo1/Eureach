@@ -35,6 +35,7 @@ create index if not exists idx_refresh_user on refresh_token(user_id, expires_at
 create unique index if not exists uq_role_tenant_id on app_role(tenant_id,id);
 alter table app_user drop constraint if exists app_user_tenant_id_id_key;
 create unique index if not exists uq_user_tenant_id on app_user(tenant_id,id);
+alter table campaign add column if not exists created_at timestamptz not null default now();
 alter table campaign add constraint uq_campaign_tenant_id unique(tenant_id,id);
 alter table queue add constraint uq_queue_tenant_id unique(tenant_id,id);
 alter table territory add constraint uq_territory_tenant_id unique(tenant_id,id);
