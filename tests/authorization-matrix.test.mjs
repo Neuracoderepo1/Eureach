@@ -65,9 +65,9 @@ if (!adminUrl || !appUrl || !JWT_SECRET) {
     'users.manage':      { method: 'GET',  path: () => '/api/v1/roles' }
   };
 
-  let server, baseUrl, tenantId, recordId;
+  let server, baseUrl, tenantId, recordId, testUserId;
 
-  test('start real server and seed one tenant + one record (ngo config)', async () => {
+  test('start real server and seed one tenant + one real app_user + one record (ngo config)', async () => {
     server = createServer();
     await new Promise((resolve) => server.listen(0, resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -77,6 +77,24 @@ if (!adminUrl || !appUrl || !JWT_SECRET) {
     );
     tenantId = t.rows[0].id;
 
+    // claims.sub is stored as an actor/agent id (uuid column, with a real
+    // foreign key to app_user(tenant_id,id)) by auditQuery() and by the
+    // outreach/follow-up writes. It must reference an actual app_user
+    // row -- a well-formed UUID that doesn't exist is not enough, the FK
+    // constraint rejects it. app_user.role_id also has a real FK to
+    // app_role, so a role row is seeded first even though this test
+    // grants permissions directly via JWT claims rather than a DB
+    // lookup.
+    const role = await adminPool.query(
+      "insert into app_role(id, tenant_id, name, permissions) values (gen_random_uuid(), $1, 'authz-test-role', '[]'::jsonb) returning id",
+      [tenantId]
+    );
+    const user = await adminPool.query(
+      "insert into app_user(id, tenant_id, name, email, password_hash, role_id) values (gen_random_uuid(), $1, 'Authz Test User', 'authz-test@example.invalid', 'not-a-real-hash', $2) returning id",
+      [tenantId, role.rows[0].id]
+    );
+    testUserId = user.rows[0].id;
+
     const r = await adminPool.query(
       "insert into record(id, tenant_id, status, custom_fields) values (gen_random_uuid(), $1, 'New', '{}'::jsonb) returning id",
       [tenantId]
@@ -84,10 +102,6 @@ if (!adminUrl || !appUrl || !JWT_SECRET) {
     recordId = r.rows[0].id;
   });
 
-  // claims.sub is stored as an actor id (uuid column) by auditQuery() on
-  // every write endpoint -- it must be a real UUID, not an arbitrary
-  // string, or writes fail with "invalid input syntax for type uuid".
-  const testUserId = randomUUID();
   function tokenWith(permissions) {
     return signJwt({ sub: testUserId, tid: tenantId, role: 'authz-test-role', permissions }, JWT_SECRET, 900);
   }
