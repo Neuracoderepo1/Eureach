@@ -37,7 +37,10 @@ DUMP_DIR="$(mktemp -d)"
 DUMP_FILE="$DUMP_DIR/dr-drill.dump"
 
 echo "== 1/6: seeding marker row in $PGDATABASE =="
-MARKER_TENANT_ID=$(psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c \
+# -q suppresses psql's own "INSERT 0 1" completion tag, which it prints
+# to stdout (not stderr) even in -t -A mode for RETURNING statements --
+# without it, that tag gets captured into the variable along with the id.
+MARKER_TENANT_ID=$(psql "$ADMIN_DATABASE_URL" -q -X -t -A -v ON_ERROR_STOP=1 -c \
   "insert into tenant(id, slug, name, industry_key) values (gen_random_uuid(), '$MARKER_TENANT_SLUG', 'DR Drill Marker', 'ngo') returning id")
 echo "   marker tenant id: $MARKER_TENANT_ID"
 
@@ -45,10 +48,6 @@ echo "== 2/6: running scripts/backup.sh =="
 BACKUP_FILE=$(sh scripts/backup.sh "$DUMP_FILE")
 echo "   backup written: $BACKUP_FILE"
 [ -s "$BACKUP_FILE" ] || { echo "FAIL: backup file is empty"; exit 1; }
-
-echo "== diagnostic: does the dump actually contain tenant table data? =="
-pg_restore --list "$BACKUP_FILE" | grep -i "TABLE DATA.*tenant" \
-  || echo "   WARNING: no 'TABLE DATA ... tenant' entry found in the dump's table of contents"
 
 echo "== 3/6: dropping $PGDATABASE to simulate real data loss =="
 dropdb --if-exists --host="$PGHOST" --username="$PGUSER" "$PGDATABASE"
@@ -58,32 +57,17 @@ createdb --host="$PGHOST" --username="$PGUSER" "$PGDATABASE"
 
 echo "== 5/6: running scripts/restore.sh against the dump =="
 CONFIRM_RESTORE=YES sh scripts/restore.sh "$BACKUP_FILE"
-RESTORE_EXIT=$?
-echo "   restore.sh exit code: $RESTORE_EXIT"
-
-echo "== diagnostic: how many rows are in tenant right now? =="
-psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "select count(*) from tenant" \
-  || echo "   (that query itself failed -- see error above)"
-
-echo "== diagnostic: what is actually in tenant right now (id | slug)? =="
-psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "select id || ' | ' || slug from tenant" \
-  || echo "   (that query itself failed -- see error above)"
-echo "   expected to find: $MARKER_TENANT_ID | $MARKER_TENANT_SLUG"
 
 echo "== 6/6: verifying the marker row survived with its exact value =="
-RESTORED_ID=$(psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c \
+RESTORED_ID=$(psql "$ADMIN_DATABASE_URL" -q -X -t -A -v ON_ERROR_STOP=1 -c \
   "select id from tenant where slug='$MARKER_TENANT_SLUG'")
-echo "== diagnostic: exact captured values (brackets show hidden whitespace) =="
-echo "   MARKER_TENANT_ID=[$MARKER_TENANT_ID] ($(printf '%s' "$MARKER_TENANT_ID" | wc -c) bytes)"
-echo "   RESTORED_ID=[$RESTORED_ID] ($(printf '%s' "$RESTORED_ID" | wc -c) bytes)"
-echo "   MARKER_TENANT_SLUG=[$MARKER_TENANT_SLUG] ($(printf '%s' "$MARKER_TENANT_SLUG" | wc -c) bytes)"
 if [ "$RESTORED_ID" != "$MARKER_TENANT_ID" ]; then
   echo "FAIL: marker tenant not found (or id mismatch) after restore -- restore did not recover the data"
   exit 1
 fi
 
 echo "== cleanup: removing marker row and temp dump =="
-psql "$ADMIN_DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "delete from tenant where id='$RESTORED_ID'" >/dev/null
+psql "$ADMIN_DATABASE_URL" -q -X -v ON_ERROR_STOP=1 -c "delete from tenant where id='$RESTORED_ID'" >/dev/null
 rm -rf "$DUMP_DIR"
 
 echo "PASS: backup -> destroy -> restore -> integrity check succeeded"
