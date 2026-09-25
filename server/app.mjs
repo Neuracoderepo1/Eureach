@@ -209,7 +209,7 @@ async function api(req, res, claims, method, pathname, body) {
     const idempotencyKey = String(req.headers['idempotency-key'] || '').trim();
     if (idempotencyKey && (idempotencyKey.length < 8 || idempotencyKey.length > 200)) throw Object.assign(new Error('Idempotency-Key must be 8-200 characters'), { status: 400, code: 'INVALID_IDEMPOTENCY_KEY' });
     const result = await withTenant(claims.tid, async client => {
-      const record = (await client.query('select * from record where id=$1')).rows[0]; if (!record) throw Object.assign(new Error('Record not found'), { status: 404, code: 'NOT_FOUND' });
+      const record = (await client.query('select * from record where id=$1', [recordId])).rows[0]; if (!record) throw Object.assign(new Error('Record not found'), { status: 404, code: 'NOT_FOUND' });
       if (config.workflow.outcomes.some(o=>o.terminal && o.resultingState===record.status)) throw Object.assign(new Error('Cannot log outreach against a terminal record'), { status: 409, code: 'RECORD_TERMINAL' });
       if (idempotencyKey) { const prior = (await client.query("select id from outreach_attempt where idempotency_key=$1 and tenant_id=current_setting('app.tenant_id')::uuid", [idempotencyKey])).rows[0]; if (prior) return { attempt: { id: prior.id }, idempotent: true }; }
       const attemptId = uuid(); const outcomeId = uuid();

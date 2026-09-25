@@ -22,6 +22,7 @@
 // assignment or follow-up -- see tests/e2e/operator-console.spec.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { createServer } from '../server/app.mjs';
 import { signJwt } from '../server/security.mjs';
@@ -83,8 +84,12 @@ if (!adminUrl || !appUrl || !JWT_SECRET) {
     recordId = r.rows[0].id;
   });
 
+  // claims.sub is stored as an actor id (uuid column) by auditQuery() on
+  // every write endpoint -- it must be a real UUID, not an arbitrary
+  // string, or writes fail with "invalid input syntax for type uuid".
+  const testUserId = randomUUID();
   function tokenWith(permissions) {
-    return signJwt({ sub: 'authz-test-user', tid: tenantId, role: 'authz-test-role', permissions }, JWT_SECRET, 900);
+    return signJwt({ sub: testUserId, tid: tenantId, role: 'authz-test-role', permissions }, JWT_SECRET, 900);
   }
 
   async function call(permission, token) {
