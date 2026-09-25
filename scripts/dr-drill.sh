@@ -73,6 +73,10 @@ echo "   expected to find: $MARKER_TENANT_ID | $MARKER_TENANT_SLUG"
 echo "== 6/6: verifying the marker row survived with its exact value =="
 RESTORED_ID=$(psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c \
   "select id from tenant where slug='$MARKER_TENANT_SLUG'")
+echo "== diagnostic: exact captured values (brackets show hidden whitespace) =="
+echo "   MARKER_TENANT_ID=[$MARKER_TENANT_ID] ($(printf '%s' "$MARKER_TENANT_ID" | wc -c) bytes)"
+echo "   RESTORED_ID=[$RESTORED_ID] ($(printf '%s' "$RESTORED_ID" | wc -c) bytes)"
+echo "   MARKER_TENANT_SLUG=[$MARKER_TENANT_SLUG] ($(printf '%s' "$MARKER_TENANT_SLUG" | wc -c) bytes)"
 if [ "$RESTORED_ID" != "$MARKER_TENANT_ID" ]; then
   echo "FAIL: marker tenant not found (or id mismatch) after restore -- restore did not recover the data"
   exit 1
