@@ -46,6 +46,10 @@ BACKUP_FILE=$(sh scripts/backup.sh "$DUMP_FILE")
 echo "   backup written: $BACKUP_FILE"
 [ -s "$BACKUP_FILE" ] || { echo "FAIL: backup file is empty"; exit 1; }
 
+echo "== diagnostic: does the dump actually contain tenant table data? =="
+pg_restore --list "$BACKUP_FILE" | grep -i "TABLE DATA.*tenant" \
+  || echo "   WARNING: no 'TABLE DATA ... tenant' entry found in the dump's table of contents"
+
 echo "== 3/6: dropping $PGDATABASE to simulate real data loss =="
 dropdb --if-exists --host="$PGHOST" --username="$PGUSER" "$PGDATABASE"
 
@@ -54,6 +58,12 @@ createdb --host="$PGHOST" --username="$PGUSER" "$PGDATABASE"
 
 echo "== 5/6: running scripts/restore.sh against the dump =="
 CONFIRM_RESTORE=YES sh scripts/restore.sh "$BACKUP_FILE"
+RESTORE_EXIT=$?
+echo "   restore.sh exit code: $RESTORE_EXIT"
+
+echo "== diagnostic: how many rows are in tenant right now? =="
+psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "select count(*) from tenant" \
+  || echo "   (that query itself failed -- see error above)"
 
 echo "== 6/6: verifying the marker row survived with its exact value =="
 RESTORED_ID=$(psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c \
