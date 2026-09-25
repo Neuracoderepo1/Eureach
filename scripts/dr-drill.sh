@@ -65,6 +65,11 @@ echo "== diagnostic: how many rows are in tenant right now? =="
 psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "select count(*) from tenant" \
   || echo "   (that query itself failed -- see error above)"
 
+echo "== diagnostic: what is actually in tenant right now (id | slug)? =="
+psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "select id || ' | ' || slug from tenant" \
+  || echo "   (that query itself failed -- see error above)"
+echo "   expected to find: $MARKER_TENANT_ID | $MARKER_TENANT_SLUG"
+
 echo "== 6/6: verifying the marker row survived with its exact value =="
 RESTORED_ID=$(psql "$ADMIN_DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c \
   "select id from tenant where slug='$MARKER_TENANT_SLUG'")
