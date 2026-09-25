@@ -214,7 +214,7 @@ async function api(req, res, claims, method, pathname, body) {
       if (idempotencyKey) { const prior = (await client.query("select id from outreach_attempt where idempotency_key=$1 and tenant_id=current_setting('app.tenant_id')::uuid", [idempotencyKey])).rows[0]; if (prior) return { attempt: { id: prior.id }, idempotent: true }; }
       const attemptId = uuid(); const outcomeId = uuid();
       await client.query('insert into outreach_attempt(id,tenant_id,record_id,agent_id,channel,attempted_at,notes,idempotency_key) values($1,$2,$3,$4,$5,now(),$6,$7)', [attemptId, claims.tid, recordId, claims.sub, channel, body.notes || null, idempotencyKey || null]);
-      await client.query('insert into outcome(id,record_id,attempt_id,type,notes,occurred_at) values($1,$2,$3,$4,$5,now())', [outcomeId, recordId, attemptId, outcome.key, body.notes || null]);
+      await client.query('insert into outcome(id,tenant_id,record_id,attempt_id,type,notes,occurred_at) values($1,$2,$3,$4,$5,$6,now())', [outcomeId, claims.tid, recordId, attemptId, outcome.key, body.notes || null]);
       await client.query('update record set status=$2,updated_at=now() where id=$1', [recordId, outcome.resultingState]);
       let followUp = null;
       if (outcome.createsFollowUp) {
